@@ -101,7 +101,7 @@ await onSave({
 
                 {/* Header */}
 
-                <div className="bg-blue-600 text-white px-8 py-6 flex justify-between items-center">
+                <div className="bg-orange-600 text-white px-8 py-6 flex justify-between items-center">
 
                     <div>
 
@@ -334,7 +334,7 @@ await onSave({
 
                         <button
                             type="submit"
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl"
+                            className="bg-orange-500 hover:bg-orange-700 text-white px-8 py-3 rounded-xl"
                         >
 
                             {product ? "Update Product" : "Save Product"}
