@@ -10,6 +10,8 @@ export default function Pos() {
   const [cart, setCart] = useState([]);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showReceipt, setShowReceipt] = useState(false);
+  const [lastSale, setLastSale] = useState(null);
 
   // ---------------- LOAD PRODUCTS ----------------
   useEffect(() => {
@@ -109,7 +111,7 @@ const filteredProducts = useMemo(() => {
 
   // ---------------- CHECKOUT ----------------
 // ---------------- CHECKOUT ----------------
-const checkout = async () => {
+const checkout = () => {
   if (cart.length === 0) {
     toast.error("Cart is empty.");
     return;
@@ -120,59 +122,16 @@ const checkout = async () => {
     return;
   }
 
-  const changeAmount = Number(cash) - total;
+  setLastSale({
+    items: [...cart],
+    total,
+    cash: Number(cash),
+    change: Number(cash) - total,
+    date: new Date(),
+  });
 
-  try {
-    // Save Sale
-    const { error: saleError } = await supabase
-      .from("sales")
-      .insert([
-        {
-          subtotal: total,
-          total: total,
-          payment: Number(cash),
-          change: changeAmount,
-          created_at: new Date().toISOString(),
-        },
-      ]);
-
-    if (saleError) {
-      console.error(saleError);
-      toast.error(saleError.message);
-      return;
-    }
-
-    // Update Product Stocks
-    for (const item of cart) {
-      const newStock = item.stock - item.qty;
-
-      const { error: stockError } = await supabase
-        .from("products")
-        .update({
-          stock: newStock,
-        })
-        .eq("id", item.id);
-
-      if (stockError) {
-        console.error(stockError);
-        toast.error(`Failed to update stock for ${item.name}`);
-        return;
-      }
-    }
-
-    // Reload products
-    await fetchProducts();
-
-    toast.success("Sale completed!");
-
-    setCart([]);
-    setCash("");
-  } catch (err) {
-    console.error(err);
-    toast.error("Failed to complete sale.");
-  }
+  setShowReceipt(true);
 };
-
 
   // ---------------- LOADING UI ----------------
   if (loading) {
@@ -182,6 +141,57 @@ const checkout = async () => {
       </div>
     );
   }
+
+async function nextSale() {
+  try {
+    const { error: saleError } = await supabase
+      .from("sales")
+      .insert([
+        {
+          subtotal: lastSale.total,
+          total: lastSale.total,
+          payment: lastSale.cash,
+          change: lastSale.change,
+          created_at: new Date().toISOString(),
+        },
+      ]);
+
+    if (saleError) {
+      toast.error(saleError.message);
+      return;
+    }
+
+    for (const item of lastSale.items) {
+      const { error } = await supabase
+        .from("products")
+        .update({
+          stock: item.stock - item.qty,
+        })
+        .eq("id", item.id);
+
+      if (error) {
+        toast.error(`Failed to update stock for ${item.name}`);
+        return;
+      }
+    }
+
+    await fetchProducts();
+
+    setCart([]);
+    setCash("");
+    setLastSale(null);
+    setShowReceipt(false);
+
+    toast.success("Sale completed!");
+  } catch (err) {
+    console.error(err);
+    toast.error("Failed to complete sale.");
+  }
+}
+
+function backToPOS() {
+  setShowReceipt(false);
+}
 
   // ---------------- UI ----------------
   return (
@@ -336,16 +346,118 @@ const checkout = async () => {
 
             <button
               onClick={checkout}
-              className="w-full mt-2 bg-orange-600 hover:bg-orange-700 active:scale-95 transition-all rounded-xl py-2 text-sm font-semibold text-white shadow-lg"
+              className="w-full mt-2 bg-orange-600 hover:bg-orange-700 active:scale-95 transition-all rounded-xl py-4 text-sm font-semibold text-white shadow-lg"
             >
               Complete Sale
             </button>
+
+            
 
           </div>
 
         </div>
 
       </div>
+{showReceipt && lastSale && (
+  <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center">
+
+    <div className="bg-white w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl shadow-2xl max-h-[90vh] flex flex-col animate-in slide-in-from-bottom duration-300">
+
+      {/* Header */}
+      <div className="bg-gradient-to-r from-orange-500 to-amber-600 text-white p-5 rounded-t-3xl sm:rounded-t-2xl">
+
+        <h2 className="text-2xl font-bold">
+          Sale Completed 🎉
+        </h2>
+
+        <p className="text-orange-100 text-sm">
+          Transaction Summary
+        </p>
+
+      </div>
+
+      {/* Items */}
+      <div className="flex-1 overflow-y-auto p-5 space-y-3">
+
+        {lastSale.items.map((item) => (
+          <div
+            key={item.id}
+            className="flex justify-between items-center border rounded-xl p-3"
+          >
+            <div className="min-w-0">
+
+              <h3 className="font-semibold truncate">
+                {item.name}
+              </h3>
+
+              <p className="text-sm text-gray-500">
+                {item.qty} × ₱{Number(item.selling_price).toLocaleString()}
+              </p>
+
+            </div>
+
+            <span className="font-bold text-orange-600">
+              ₱{(item.qty * item.selling_price).toLocaleString()}
+            </span>
+          </div>
+        ))}
+
+      </div>
+
+      {/* Summary */}
+      <div className="border-t p-5 space-y-3">
+
+        <div className="flex justify-between">
+          <span>Total</span>
+          <span className="font-bold">
+            ₱{lastSale.total.toLocaleString()}
+          </span>
+        </div>
+
+        <div className="flex justify-between">
+          <span>Cash</span>
+          <span>
+            ₱{lastSale.cash.toLocaleString()}
+          </span>
+        </div>
+
+        <div className="flex justify-between">
+          <span>Change</span>
+          <span className="font-bold text-green-600">
+            ₱{lastSale.change.toLocaleString()}
+          </span>
+        </div>
+
+        <div className="flex justify-between text-xs text-gray-500">
+          <span>Date</span>
+          <span>{lastSale.date.toLocaleString()}</span>
+        </div>
+
+      </div>
+
+      {/* Buttons */}
+      <div className="border-t p-5 flex flex-col sm:flex-row gap-3">
+
+        <button
+          onClick={backToPOS}
+          className="w-full sm:flex-1 py-3 rounded-xl border border-gray-300 font-medium hover:bg-gray-100 transition"
+        >
+          Back
+        </button>
+
+        <button
+          onClick={nextSale}
+          className="w-full sm:flex-1 py-3 rounded-xl bg-orange-600 text-white font-semibold hover:bg-orange-700 transition"
+        >
+          Confirm
+        </button>
+
+      </div>
+
+    </div>
+
+  </div>
+)}
     </div>
   );
 }
