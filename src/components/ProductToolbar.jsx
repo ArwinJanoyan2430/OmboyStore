@@ -26,11 +26,13 @@ export default function ProductToolbar({
         >
           <option value="">All Categories</option>
 
-          {categories.map((cat) => (
-            <option key={cat.id} value={cat.id}>
-              {cat.name}
-            </option>
-          ))}
+          {[...categories]
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map((cat) => (
+              <option key={cat.id} value={cat.id}>
+                {cat.name}
+              </option>
+            ))}
         </select>
 
         {/* Add Product */}
