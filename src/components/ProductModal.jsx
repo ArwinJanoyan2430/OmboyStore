@@ -117,6 +117,9 @@ export default function ProductModal({
     };
 
     await onSave(payload);
+
+    toast.success(product ? "Product updated!" : "Product added!");
+    onClose();
   }
 
   if (!show) return null;
